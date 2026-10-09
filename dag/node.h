@@ -22,7 +22,7 @@ typedef enum {
 typedef struct {
     tensor_t type; 
     size_t length;
-    int owns_data; // Nonzero when the arena must free data.
+    int owns_data; 
     float *data;
 } tensor; 
 

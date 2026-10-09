@@ -81,7 +81,6 @@ ast_status prepare(arena* ctx) {
             return unallocated_input; 
         }
 
-        // Only multiplication broadcasts scalars.
         size_t length;
         if (op->type == _mul && arg0->type == _scalar) {
             length = arg1->length;
@@ -95,7 +94,6 @@ ast_status prepare(arena* ctx) {
             length = arg0->length;
         }
 
-        // Keep existing storage when the shape has not changed.
         if (out->data == NULL || out->length != length) {
             float *data = realloc(out->data, length * sizeof(*data));
             if (data == NULL) {
@@ -107,7 +105,7 @@ ast_status prepare(arena* ctx) {
         out->length = length;
     }
 
-    // all lengths are consistent;  
+    // all lengths are consistent  
     return success; 
 }
 
