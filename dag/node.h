@@ -1,75 +1,86 @@
 #ifndef NODE_H
-#define NODE_H
+#define NODE_H 
 
 #include <stdio.h>
-#include <stdlib.h>
+#include <stdlib.h> 
 #include <assert.h>
+#include <stdbool.h>
 
-// data type 
+/// operator variant 
 typedef enum { 
-    _scalar, 
-    _vector,
-} tensor_t; 
-
-// operator type 
-typedef enum {
-    _mul,
-    _add,
-    _sub,
+    _add_, 
+    _sub_,
+    _mul_, 
 } operator_t;
 
-// data struct 
-typedef struct {
-    tensor_t type; 
-    size_t length;
-    int owns_data; 
-    float *data;
-} tensor; 
+// data variant 
+typedef enum {
+    _scalar_, 
+    _vector_,
+} tensor_t;
 
-// operator struct 
+// operator node/type 
 typedef struct { 
     operator_t type;
-    size_t* src_tensor_ids;
-    size_t dst_tensor_id;
-    size_t arg_count;
-} operator;
 
-// arena context 
-typedef struct {
+    size_t* src_tensor_ids;
+    size_t  dst_tensor_id;
+    size_t length; 
+    size_t  src_count;
+} operator; 
+
+// tensor node/type 
+typedef struct { 
+    tensor_t type; 
+    
+    union { 
+        float scalar_data;
+        float *vector_data;
+    } data; 
+
+    size_t length; 
+    bool arena_owns; 
+} tensor; 
+
+// arena of operators and tensors  
+typedef struct { 
     operator* operators;
-    size_t operator_capacity;
     size_t operator_count;
-        
+    size_t operator_capacity;
+
     tensor* tensors;
+    size_t tensor_count; 
     size_t tensor_capacity;
-    size_t tensor_count;
 } arena; 
 
 
-// arena alloc 
-static arena* create_arena(void) { 
-    arena *ctx = calloc(1, sizeof(arena));
-    ctx->operator_capacity = 32;
-    ctx->operators = malloc(ctx->operator_capacity * sizeof(operator));
+arena* create_arena(void) { 
+    arena* a = calloc(1, sizeof(arena));
 
-    ctx->tensor_capacity = 32;
-    ctx->tensors = malloc(ctx->tensor_capacity * sizeof(operator));
+    a->operator_capacity = 32;
+    a->tensor_capacity = 32;
+    a->operators = malloc(a->operator_capacity * sizeof(operator));
+    a->tensors   = malloc(a->tensor_capacity   * sizeof(tensor)); 
 
-    return ctx; 
+    return a;
 }
 
-// free arena 
-static void free_arena(arena *ctx) { 
-    for (size_t idx = 0; idx < ctx->operator_count; idx++) 
-        free(ctx->operators[idx].src_tensor_ids);
-    for (size_t idx = 0; idx < ctx->tensor_count; idx++) { 
-        if (ctx->tensors[idx].owns_data) 
-            free(ctx->tensors[idx].data);
+void free_arena(arena* a) { 
+    size_t n_operators = a->operator_count;
+    size_t n_tensors   = a->tensor_count; 
+
+    for (size_t i = 0; i < n_operators; i++) {
+        free(a->operators[i].src_tensor_ids);
     }
 
-    free(ctx->operators);
-    free(ctx->tensors);
-    free(ctx);
+    for (size_t j = 0; j < n_tensors; j++) { 
+        if (a->tensors[j].arena_owns && a->tensors[j].type == _vector_)
+            free(a->tensors[j].data.vector_data); 
+    }
+
+    free(a->operators);
+    free(a->tensors);
+    free(a); 
 }
 
 

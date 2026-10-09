@@ -1,107 +1,108 @@
 #ifndef BUILDER_H
-#define BUILDER_H
+#define BUILDER_H 
 
 #include "node.h"
 
-/// allocates a tensor type to the arena
-static size_t reserve_tensor(arena *ctx) { 
-    if (ctx->tensor_count >= ctx->tensor_capacity) { 
-        ctx->tensor_capacity *= 2;
-        ctx->tensors = realloc(
-            ctx->tensors, 
-            ctx->tensor_capacity * sizeof(tensor)
+
+/// allocates a tensor in the arena 
+size_t reserve_tensor(arena *a) { 
+    if (a->tensor_count >= a->tensor_capacity) {
+        a->tensor_capacity *= 2; 
+        a->tensors = realloc(
+            a->tensors, 
+            a->tensor_capacity * sizeof(tensor)
+        ); 
+    }
+
+    return a->tensor_count++; 
+}
+
+/// allocates an operator in the arena 
+size_t reserve_operator(arena *a) { 
+    if (a->operator_count >= a->operator_capacity) {
+        a->operator_capacity *= 2;
+        a->operators = realloc(
+            a->operators, 
+            a->operator_capacity * sizeof(operator)
         );
     }
 
-    return ctx->tensor_count++; 
+    return a->operator_count++; 
 }
 
-/// allocates an operator type to the arena 
-static size_t reserve_operator(arena *ctx) { 
-    if (ctx->operator_count >= ctx->operator_capacity) { 
-        ctx->operator_capacity *= 2;
-        ctx->operators = realloc(
-            ctx->operators, 
-            ctx->operator_capacity * sizeof(operator)
-        );
-    }
+/// allocates and adds a `scalar` to the arena 
+size_t scalar(arena *a, float alpha) { 
+    size_t id = reserve_tensor(a); 
 
-    return ctx->operator_count++; 
+    a->tensors[id].type = _scalar_;
+    a->tensors[id].data.scalar_data = alpha; 
+    a->tensors[id].length = 1; 
+    a->tensors[id].arena_owns = false;
+    
+    return id; 
 }
 
+/// allocates an adds a `vector` to the arena
+size_t vector(arena *a, float *x, size_t length) { 
+    size_t id = reserve_tensor(a); 
 
-/// adds an arena-owned scalar to the arena 
-///
-/// returns its position in the arena 
-static size_t scalar(arena *ctx, float alpha) { 
-    // if this fails i am sorry 
-    float *data = malloc(sizeof(*data));
-    *data = alpha; 
-
-    size_t id = reserve_tensor(ctx);
-    ctx->tensors[id] = (tensor) { 
-        .type = _scalar, 
-        .length = 1, 
-        .owns_data = 1, 
-        .data = data, 
-    };
+    a->tensors[id].type = _vector_; 
+    a->tensors[id].data.vector_data = x; 
+    a->tensors[id].length = length; 
+    a->tensors[id].arena_owns = false; 
 
     return id; 
 }
 
-/// adds a caller-owned vector to the arena
-///
-/// returns its position in the arena 
-static size_t vector(arena *ctx, float *x, size_t length) { 
-    size_t id = reserve_tensor(ctx);
+/// allocates and adds an operator to the arena
+size_t create_operator(
+    arena *a, 
+    operator_t type, 
+    size_t* src_tensor_ids,
+    size_t  src_count
+) { 
+    size_t id = reserve_operator(a); 
+    size_t dst_id = reserve_tensor(a); 
 
-    ctx->tensors[id] = (tensor) {
-        .type = _vector,
-        .length = length,
-        .owns_data = 0,
-        .data = x, 
-    };
+    a->operators[id].type = type; 
+    a->operators[id].src_tensor_ids = src_tensor_ids;
+    a->operators[id].dst_tensor_id  = dst_id; 
+    a->operators[id].src_count = src_count;
+    a->operators[id].dst_tensor_id = dst_id;
+    a->tensors[dst_id].arena_owns = true;
 
-    return id; 
+    // temporaries 
+    a->tensors[dst_id].data.vector_data = NULL; 
+    a->tensors[dst_id].type = _vector_; 
+
+    return dst_id;  
 }
 
+/// allocates and adds a `mul` operation to the arena 
+size_t mul(arena *a, size_t arg0_id, size_t arg1_id) {
+    size_t *src_dst_ids = malloc(2 * sizeof(*src_dst_ids)); 
+    src_dst_ids[0] = arg0_id;
+    src_dst_ids[1] = arg1_id; 
 
-/// adds an operator to the arena
-///
-/// returns the position of its output in the arena
-static size_t op(arena *ctx, operator_t operator, size_t arg0, size_t arg1) { 
-    size_t operator_id = reserve_operator(ctx);
-    size_t dst_tensor_id = reserve_tensor(ctx);
-    ctx->tensors[dst_tensor_id] = (tensor) {
-        .owns_data = 1,
-        .data = NULL,
-        .length = 0,
-        .type = _scalar,
-    };
-
-    ctx->operators[operator_id].type = operator; 
-    ctx->operators[operator_id].src_tensor_ids = malloc(
-        2 * sizeof(*(ctx->operators[operator_id].src_tensor_ids))
-    );
-    ctx->operators[operator_id].src_tensor_ids[0] = arg0;
-    ctx->operators[operator_id].src_tensor_ids[1] = arg1; 
-    ctx->operators[operator_id].arg_count = 2;
-    ctx->operators[operator_id].dst_tensor_id = dst_tensor_id;
-
-    return dst_tensor_id; 
+    return create_operator(a, _mul_, src_dst_ids, 2); 
 }
 
-/// adds `mul` op to the arena 
-static size_t mul(arena *ctx, size_t a, size_t b) { 
-    return op(ctx, _mul, a, b);
-} 
-/// adds `add` op to the arena 
-static size_t add(arena *ctx, size_t a, size_t b) {
-    return op(ctx, _add, a, b); 
+/// allocates and adds an `add` operation to the arena
+size_t add(arena *a, size_t arg0_id, size_t arg1_id) {
+    size_t *src_dst_ids = malloc(2 * sizeof(*src_dst_ids)); 
+    src_dst_ids[0] = arg0_id;
+    src_dst_ids[1] = arg1_id; 
+
+    return create_operator(a, _add_, src_dst_ids, 2); 
 }
-/// adds `sub` op to the arena 
-static size_t sub(arena *ctx, size_t a, size_t b) { 
-    return op(ctx, _sub, a, b); 
+
+/// allocates and adds a `sub` operation to the arena 
+size_t sub(arena *a, size_t arg0_id, size_t arg1_id) {
+    size_t *src_dst_ids = malloc(2 * sizeof(*src_dst_ids)); 
+    src_dst_ids[0] = arg0_id;
+    src_dst_ids[1] = arg1_id; 
+
+    return create_operator(a, _sub_, src_dst_ids, 2); 
 }
 
 
