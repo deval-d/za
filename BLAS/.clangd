@@ -1,0 +1,2 @@
+CompileFlags:
+  Add: [-march=armv9.2-a+sme2]
