@@ -20,8 +20,7 @@ static void fma_pass(arena* a, schedule* s, schedule_analysis sa) {
                 // is a user input, not from an op 
                 continue; 
 
-            candidate[input] = s[producer_id].operator == schedule_mul &&
-                sa.use_count[value_id] == 1; 
+            candidate[input] = s[producer_id].operator == schedule_mul; 
         }
 
         size_t chosen; 
@@ -46,7 +45,10 @@ static void fma_pass(arena* a, schedule* s, schedule_analysis sa) {
         fma_inputs[1] = mul_entry0;
         fma_inputs[2] = mul_entry1; 
 
-        s[mul_op_id].operator = schedule_removed; 
+        sa.use_count[mul_res_id]--;
+        if (sa.use_count[mul_res_id] == 0)
+            s[mul_op_id].operator = schedule_removed; 
+
         s[idx].operator = schedule_fma;
         free(s[idx].input_value_ids);
         s[idx].input_value_ids = fma_inputs; 
