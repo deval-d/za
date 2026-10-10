@@ -8,10 +8,27 @@ typedef enum {
     dimension_failure,
     num_args_failure,
     unknown_operation_failure,
+    out_of_bounds_failure,
+    no_operations_failure, 
     no_failure,
-    out_of_bounds_failure, 
 } errors;
 
+
+const char *error_name(errors err) {
+    switch (err) {
+        case allocation_failure:        return "allocation_failure";
+        case dimension_failure:         return "dimension_failure";
+        case num_args_failure:          return "num_args_failure";
+        case unknown_operation_failure: return "unknown_operation_failure";
+        case out_of_bounds_failure:     return "out_of_bounds_failure";
+        case no_operations_failure:     return "no_operations_failure";
+        case no_failure:                return "no_failure";
+        default:                        return "unknown error";
+    }
+}
+
+
+/// verifies stuff in the arena makes sense 
 errors prepare(arena *a) { 
     size_t n_operators = a->operator_count; 
 
@@ -92,7 +109,23 @@ errors prepare(arena *a) {
             default:
                 return unknown_operation_failure; 
         }
+    }
+    
+    return no_failure; 
+}
 
+
+/// an interpreter for the arena dag 
+errors evaluate(arena *a) { 
+    errors prepare_err = prepare(a); 
+    if (prepare_err != no_failure) 
+        return prepare_err; 
+
+    size_t n_operators = a->operator_count;
+
+    // allocate output buffers
+    for (size_t i = 0; i < n_operators; i++) {
+        operator *op = &a->operators[i];
         tensor *dst = &a->tensors[op->dst_tensor_id];
         if (dst->type == _vector_ && dst->data.vector_data == NULL) {
             dst->data.vector_data = malloc(op->length * sizeof(*dst->data.vector_data));
@@ -100,17 +133,7 @@ errors prepare(arena *a) {
                 return allocation_failure;
         }
     }
-    
-    return no_failure; 
-}
 
-
-errors evaluate(arena *a) { 
-    errors prepare_err = prepare(a); 
-    if (prepare_err != no_failure) 
-        return prepare_err; 
-
-    size_t n_operators = a->operator_count; 
     for (size_t k = 0; k < n_operators; k++) { 
         operator *op = &a->operators[k];
 
