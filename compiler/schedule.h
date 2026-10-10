@@ -1,7 +1,7 @@
 #ifndef SCHEDULE_H
 #define SCHEDULE_H
 
-#include "node.h"
+#include "../dag/node.h"
 #include <string.h>
 
 // operations the compiler has access to 

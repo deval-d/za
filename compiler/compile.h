@@ -1,7 +1,7 @@
 #ifndef COMPILE_H
 #define COMPILE_H
 
-#include "evaluate.h"
+#include "../dag/evaluate.h"
 #include "schedule.h"
 #include "optimize.h"
 

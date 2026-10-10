@@ -1,10 +1,10 @@
 #ifndef OPTIMIZE_H
 #define OPTIMIZE_H 
 
-#include "node.h"
+#include "../dag/node.h"
 #include "schedule.h" 
 
-void fma_pass(arena* a, schedule* s, schedule_analysis sa) { 
+static void fma_pass(arena* a, schedule* s, schedule_analysis sa) { 
     size_t n_operations = a->operator_count;
 
     for (size_t idx = 0; idx < n_operations; idx++) { 
@@ -41,7 +41,6 @@ void fma_pass(arena* a, schedule* s, schedule_analysis sa) {
         size_t other_entry = s[idx].input_value_ids[other_id];
 
         // replace the mul + add with an fma in the schedule 
-
         size_t *fma_inputs = malloc(3 * sizeof(*fma_inputs));
         fma_inputs[0] = other_entry; 
         fma_inputs[1] = mul_entry0;
