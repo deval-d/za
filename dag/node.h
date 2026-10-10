@@ -54,6 +54,10 @@ typedef struct {
 } arena; 
 
 
+/// creates an arena 
+///
+/// operator_capacity = 32;
+/// tensor_capacity = 32; 
 arena* create_arena(void) { 
     arena* a = calloc(1, sizeof(arena));
 
@@ -65,6 +69,7 @@ arena* create_arena(void) {
     return a;
 }
 
+/// frees an arena; everything but caller-owned data
 void free_arena(arena* a) { 
     size_t n_operators = a->operator_count;
     size_t n_tensors   = a->tensor_count; 
