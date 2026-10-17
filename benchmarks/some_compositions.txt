@@ -1,0 +1,46 @@
+composition 1
+sscal(a, y); saxpy(b, x, y); saxpy(c, z, y); sscal(d, y)
+a=-2, b=0.5, c=-0.25, d=0.5
+
+  length |  generated NEON (ns)    stacked BLAS (ns)
+       4 |                 7.71                18.45
+      16 |                12.01                25.03
+      31 |                12.04                26.83
+      64 |                13.33                44.16
+     127 |                18.81                51.01
+     128 |                18.19                50.29
+     255 |                34.29                77.53
+     256 |                33.15                75.57
+     511 |                66.59               150.72
+
+
+composition 2
+saxpy(a, x, y); sscal(b, y); saxpy(c, x, y); saxpy(d, z, y)
+a=0.5, b=-1, c=0.25, d=0.125
+
+  length |  generated NEON (ns)    stacked BLAS (ns)
+       4 |                 7.71                18.47
+      16 |                11.99                25.02
+      31 |                12.05                27.43
+      64 |                13.32                42.64
+     127 |                18.33                49.52
+     128 |                17.70                50.43
+     255 |                34.27                82.03
+     256 |                33.10                79.09
+     511 |                66.79               160.38
+
+
+composition 3
+saxpy(a, x, y); saxpy(b, z, y); sscal(c, y); saxpy(d, x, y); saxpy(e, z, y); sscal(f, y)
+a=0.5, b=-0.25, c=-2, d=0.25, e=0.125, f=0.5
+
+  length |  generated NEON (ns)    stacked BLAS (ns)
+       4 |                11.50                27.86
+      16 |                15.82                37.47
+      31 |                15.88                40.52
+      64 |                17.77                66.08
+     127 |                26.87                76.14
+     128 |                25.65                75.99
+     255 |                50.40               120.32
+     256 |                49.16               117.24
+     511 |                98.73               234.48
