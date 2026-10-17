@@ -20,6 +20,7 @@ typedef struct {
     size_t *input_value_ids;
     size_t output_value_id;
     size_t input_count; 
+    bool *can_overwrite_input;
 } schedule; 
 
 typedef struct { 
@@ -48,7 +49,13 @@ static schedule* make_schedule(arena *a) {
         operator *op = &a->operators[idx]; 
         schedule[idx].operator = map_operator(op->type);
         schedule[idx].input_count = op->src_count;
-        schedule[idx].input_value_ids = malloc(op->src_count * sizeof(*op->src_tensor_ids));
+        schedule[idx].can_overwrite_input = calloc(
+            op->src_count,
+            sizeof(*schedule[idx].can_overwrite_input)
+        );
+        schedule[idx].input_value_ids = malloc(
+            op->src_count * sizeof(*op->src_tensor_ids)
+        );
 
         memcpy(
             schedule[idx].input_value_ids, 
@@ -64,9 +71,114 @@ static schedule* make_schedule(arena *a) {
 
 /// frees the schedule
 static void free_schedule(schedule *s, size_t n_operations) {
-    for (size_t idx = 0; idx < n_operations; idx++)
+    for (size_t idx = 0; idx < n_operations; idx++) {
         free(s[idx].input_value_ids);
+        free(s[idx].can_overwrite_input);
+    }
     free(s);
+}
+
+/// records the final read of each tensor in the current schedule
+static size_t *make_last_use_array(arena *a, schedule *s) {
+    size_t *last_use = malloc(a->tensor_count * sizeof(*last_use));
+    if (last_use == NULL)
+        return NULL;
+
+    // -1 marks unused 
+    for (size_t id = 0; id < a->tensor_count; id++)
+        last_use[id] = -1;
+
+    for (size_t idx = 0; idx < a->operator_count; idx++) {
+        if (s[idx].operator == schedule_removed)
+            continue;
+
+        for (size_t input = 0; input < s[idx].input_count; input++)
+            last_use[s[idx].input_value_ids[input]] = idx;
+    }
+
+    // last result shouldn't be marked as unused
+    if (a->operator_count != 0)
+        last_use[s[a->operator_count - 1].output_value_id] = a->operator_count;
+
+    return last_use;
+}
+
+/// marks overwrite candidates without choosing storage for the result
+/// run after `prepare(a)` and optimization
+static void mark_overwrite_inputs(arena *a, schedule *s, size_t *last_use) {
+    for (size_t idx = 0; idx < a->operator_count; idx++) {
+        schedule *op = &s[idx];
+
+        for (size_t input = 0; input < op->input_count; input++)
+            op->can_overwrite_input[input] = false;
+
+        if (op->operator == schedule_removed)
+            continue;
+
+        tensor *dst = &a->tensors[op->output_value_id];
+        for (size_t input = 0; input < op->input_count; input++) {
+            size_t value_id = op->input_value_ids[input];
+            tensor *src = &a->tensors[value_id];
+
+            // a broadcast scalar can't hold a vector result
+            op->can_overwrite_input[input] = last_use[value_id] == idx &&
+                src->type == dst->type && src->length == dst->length;
+        }
+    }
+}
+
+static size_t *make_variable_ids(arena *a, schedule *s, size_t *last_use) {
+    size_t *variable_ids = malloc(a->tensor_count * sizeof(*variable_ids));
+    if (variable_ids == NULL)
+        return NULL;
+
+    size_t *owners = malloc(a->tensor_count * sizeof(*owners));
+    if (owners == NULL) {
+        free(variable_ids);
+        return NULL;
+    }
+
+    for (size_t id = 0; id < a->tensor_count; id++) {
+        variable_ids[id] = -1;
+        owners[id] = -1;
+    }
+
+    for (size_t idx = 0; idx < a->operator_count; idx++) {
+        schedule *op = &s[idx];
+        if (op->operator == schedule_removed)
+            continue;
+
+        size_t variable_id = op->output_value_id;
+        for (size_t input = 0; input < op->input_count; input++) {
+            size_t value_id = op->input_value_ids[input];
+            if (op->can_overwrite_input[input] &&
+                variable_ids[value_id] != (size_t)-1) {
+                variable_id = variable_ids[value_id];
+                break;
+            }
+        }
+
+        if (variable_id == op->output_value_id) {
+            tensor *dst = &a->tensors[op->output_value_id];
+            for (size_t id = 0; id < a->tensor_count; id++) {
+                size_t owner_id = owners[id];
+                if (owner_id == (size_t)-1)
+                    continue;
+
+                tensor *src = &a->tensors[owner_id];
+                if ((last_use[owner_id] == (size_t)-1 || last_use[owner_id] < idx) &&
+                    src->type == dst->type && src->length == dst->length) {
+                    variable_id = id;
+                    break;
+                }
+            }
+        }
+        variable_ids[op->output_value_id] = variable_id;
+        owners[variable_id] = op->output_value_id;
+    }
+
+    free(owners);
+    return variable_ids;
 }
 
 static schedule_analysis make_producer_use_arrays(arena *a, schedule *s) { 

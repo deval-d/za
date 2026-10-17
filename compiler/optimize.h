@@ -32,7 +32,7 @@ static void fma_pass(arena* a, schedule* s, schedule_analysis sa) {
             continue; 
 
         size_t mul_res_id = s[idx].input_value_ids[chosen]; 
-        size_t mul_op_id = sa.producer[mul_res_id];
+        size_t mul_op_id  = sa.producer[mul_res_id];
         size_t mul_entry0 = s[mul_op_id].input_value_ids[0]; 
         size_t mul_entry1 = s[mul_op_id].input_value_ids[1]; 
         
@@ -53,7 +53,12 @@ static void fma_pass(arena* a, schedule* s, schedule_analysis sa) {
         free(s[idx].input_value_ids);
         s[idx].input_value_ids = fma_inputs; 
         s[idx].input_count = 3; 
-        // leave s[idx].output_value_id unchagned   
+        free(s[idx].can_overwrite_input);
+        s[idx].can_overwrite_input = calloc(
+            s[idx].input_count, 
+            sizeof(*s[idx].can_overwrite_input)
+        );
+        // leave s[idx].output_value_id unchanged   
     }
 }
 
